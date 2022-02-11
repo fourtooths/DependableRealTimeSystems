@@ -1,21 +1,3 @@
-SCI_TINYT_H	C:\Users\aaron\Documents\TinyTimber\sciTinyTimber.h	/^#define SCI_TINYT_H$/;"	macro	line:2
-SCI_BUFSIZE	C:\Users\aaron\Documents\TinyTimber\sciTinyTimber.h	/^#define SCI_BUFSIZE  1024$/;"	macro	line:7
-super	C:\Users\aaron\Documents\TinyTimber\sciTinyTimber.h	/^    Object super;$/;"	member	line:10	struct:__anon96	access:public
-port	C:\Users\aaron\Documents\TinyTimber\sciTinyTimber.h	/^    USART_TypeDef *port;$/;"	member	line:11	struct:__anon96	access:public
-obj	C:\Users\aaron\Documents\TinyTimber\sciTinyTimber.h	/^    Object *obj;$/;"	member	line:12	struct:__anon96	access:public
-meth	C:\Users\aaron\Documents\TinyTimber\sciTinyTimber.h	/^    Method meth;$/;"	member	line:13	struct:__anon96	access:public
-head	C:\Users\aaron\Documents\TinyTimber\sciTinyTimber.h	/^    int head;$/;"	member	line:14	struct:__anon96	access:public
-tail	C:\Users\aaron\Documents\TinyTimber\sciTinyTimber.h	/^    int tail;$/;"	member	line:15	struct:__anon96	access:public
-count	C:\Users\aaron\Documents\TinyTimber\sciTinyTimber.h	/^    int count;$/;"	member	line:16	struct:__anon96	access:public
-buf	C:\Users\aaron\Documents\TinyTimber\sciTinyTimber.h	/^    char buf[SCI_BUFSIZE];$/;"	member	line:17	struct:__anon96	access:public
-Serial	C:\Users\aaron\Documents\TinyTimber\sciTinyTimber.h	/^typedef struct {     Object super;     USART_TypeDef *port;     Object *obj;     Method meth;     int head;     int tail;     int count;     char buf[SCI_BUFSIZE]; } Serial; $/;"	typedef	line:18	typeref:struct:__anon96
-initSerial	C:\Users\aaron\Documents\TinyTimber\sciTinyTimber.h	/^#define initSerial(port, obj, meth) \\$/;"	macro	line:20
-SCI_PORT0	C:\Users\aaron\Documents\TinyTimber\sciTinyTimber.h	/^#define SCI_PORT0   (USART_TypeDef *)(USART1)$/;"	macro	line:23
-SCI_IRQ0	C:\Users\aaron\Documents\TinyTimber\sciTinyTimber.h	/^#define	SCI_IRQ0	IRQ_USART1$/;"	macro	line:24
-sci_init	C:\Users\aaron\Documents\TinyTimber\sciTinyTimber.h	/^void sci_init(Serial *sci, int unused);$/;"	prototype	line:26	signature:(Serial *sci, int unused)	returns:void 
-sci_write	C:\Users\aaron\Documents\TinyTimber\sciTinyTimber.h	/^void sci_write(Serial *sci, char *buf);$/;"	prototype	line:27	signature:(Serial *sci, char *buf)	returns:void 
-sci_writechar	C:\Users\aaron\Documents\TinyTimber\sciTinyTimber.h	/^void sci_writechar(Serial *sci, int ch);$/;"	prototype	line:28	signature:(Serial *sci, int ch)	returns:void 
-SCI_INIT	C:\Users\aaron\Documents\TinyTimber\sciTinyTimber.h	/^#define SCI_INIT(sci)           SYNC(sci, sci_init, 0)$/;"	macro	line:30
-SCI_WRITE	C:\Users\aaron\Documents\TinyTimber\sciTinyTimber.h	/^#define SCI_WRITE(sci,buf)      SYNC(sci, sci_write, buf)$/;"	macro	line:31
-SCI_WRITECHAR	C:\Users\aaron\Documents\TinyTimber\sciTinyTimber.h	/^#define SCI_WRITECHAR(sci,ch)   SYNC(sci, sci_writechar, ch)$/;"	macro	line:32
-sci_interrupt	C:\Users\aaron\Documents\TinyTimber\sciTinyTimber.h	/^int sci_interrupt(Serial *self, int unused);$/;"	prototype	line:34	signature:(Serial *self, int unused)	returns:int 
+__SYSTEM_STM32F4XX_H	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\device\inc\system_stm32f4xx.h	/^#define __SYSTEM_STM32F4XX_H$/;"	macro	line:40
+SystemInit	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\device\inc\system_stm32f4xx.h	/^extern void SystemInit(void);$/;"	prototype	line:86	signature:(void)	returns:void 
+SystemCoreClockUpdate	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\device\inc\system_stm32f4xx.h	/^extern void SystemCoreClockUpdate(void);$/;"	prototype	line:87	signature:(void)	returns:void 
