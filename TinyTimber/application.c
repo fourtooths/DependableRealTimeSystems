@@ -203,16 +203,20 @@ void reader(App * self, int c) {
     }
     if ((char) c == 'q') {
         Background * back = (Background * ) self -> backgroundpnt;
-        back -> background_loop_range += 500;
-        snprintf(valprint, 10, "%d", back -> background_loop_range);
+        int background_lr = SYNC(back, read_background_lr, NULL);
+        background_lr += 500;
+        SYNC(back, set_background_lr, background_lr);
+        snprintf(valprint, 10, "%d", background_lr);
         SCI_WRITE( & sci0, "\nBackground increased to: ");
         SCI_WRITE( & sci0, valprint);
         SCI_WRITE( & sci0, "\0");
     }
     if ((char) c == 'a') {
         Background * back = (Background * ) self -> backgroundpnt;
-        back -> background_loop_range -= 500;
-        snprintf(valprint, 10, "%d", back -> background_loop_range);
+         int background_lr = SYNC(back, read_background_lr, NULL);
+        background_lr -= 500;
+        SYNC(back, set_background_lr, background_lr);
+        snprintf(valprint, 10, "%d", background_lr);
         SCI_WRITE( & sci0, "\nBackground decreased to: ");
         SCI_WRITE( & sci0, valprint);
         SCI_WRITE( & sci0, "\0");
@@ -221,14 +225,26 @@ void reader(App * self, int c) {
         Background * back = (Background * ) self -> backgroundpnt;
         if (self -> deadline > 0) {
             self -> deadline = USEC(0);
-            back -> deadline = USEC(0);
-        } else {
+            SYNC(back, set_background_deadline, 0);
+            } else {
             self -> deadline = USEC(100);
-            back -> deadline = USEC(1300);
+            SYNC(back, set_background_deadline, 1300);
         }
     }
 
     SCI_WRITE( & sci0, "\n");
+}
+
+void set_background_lr(Background * self, int lr){
+    self->background_loop_range = lr;
+}
+
+int read_background_lr(Background * self, int lr){
+    return self->background_loop_range;
+}
+
+int set_background_deadline(Background * self, int dl){
+    self->deadline = dl;
 }
 
 void play(App * self, int c) {
@@ -312,7 +328,7 @@ void startApp(App * self, int arg) {
     SCI_INIT( & sci0);
     SCI_WRITE( & sci0, "Hello, hello...\n");
     play(self, 123);
-    background_task( & background, 123);
+    SYNC(&background, background_task, NULL);
     msg.msgId = 1;
     msg.nodeId = 1;
     msg.length = 6;
