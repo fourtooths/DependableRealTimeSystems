@@ -17,22 +17,58 @@
  * m - Toggle mute
  * */
 
+
+
+
+typedef struct {
+	Object super;
+	int volume;
+	int period;
+	int stop;
+	int flip;
+	int * spointer;
+	int volume_restore;
+	int muted;
+	
+} Player;
+
+Player player = {
+	initObject(),
+	0x10,
+	0,
+	0,
+	0,
+	(int * ) 0x4000741C
+};
+
+typedef struct {
+	Object super;
+	int tempo;
+	int key;
+	int note_index;
+	Player * player_pointer;
+	int flip;
+} Controller;
+
+Controller controller = {
+	initObject(),
+	120,
+	0,
+	0,
+	&player,
+	0,
+
+};
+
 typedef struct {
     Object super;
     int count;
     char c;
-    int * spointer;
-    int volume;
-    int period;
-    int flip;
-    int muted;
-    int mutevalue;
-    int backgroundpnt;
-    int deadline;
-    Timer timer;
-    int32_t max;
-    int32_t sum;
-    int countt;
+    Controller *controller_pointer;
+	Player *player_pointer;
+	int mode;
+	int buffer_pointer;
+	char buffer[20];
 }
 App;
 
@@ -40,41 +76,13 @@ App app = {
     initObject(),
     0,
     'X',
-    (int * ) 0x4000741C,
-    0x5,
-    500,
-    0,
-    0,
-    0,
-    0,
-    USEC(100),
-    initTimer(),
-    0,
-    0,
-    0,
+    &controller,
+    &player,
+	0,
+	0,
+	{0},
 };
 
-typedef struct {
-    Object super;
-    int background_loop_range;
-    int deadline;
-    Timer timer;
-    int32_t max;
-    int32_t sum;
-    int count;
-}
-Background;
-
-Background background = {
-    initObject(),
-    13500,
-    USEC(1300),
-    initTimer(),
-    0,
-    0,
-    0,
-
-};
 
 void reader(App * , int);
 void receiver(App * , int);
@@ -90,7 +98,7 @@ void receiver(App * self, int unused) {
     SCI_WRITE( & sci0, msg.buff);
 }
 
-int brotherjohn[] = {
+int notes[] = {
     0,
     2,
     4,
@@ -124,7 +132,7 @@ int brotherjohn[] = {
     -5,
     0
 };
-int period[] = {
+int periods[] = {
     2024,
     1911,
     1803,
@@ -151,110 +159,194 @@ int period[] = {
     536,
     506
 };
+
+typedef enum {
+	A,
+	B,
+	C
+}Beat;
+
+Beat lengths[] = {
+	A,
+	A,
+	A,
+	A,
+	A,
+	A,
+	A,
+	A,
+	A,
+	A,
+	B,
+	A,
+	A,
+	B,
+	C,
+	C,
+	C,
+	C,
+	A,
+	A,
+	C,
+	C,
+	C,
+	C,
+	A,
+	A,
+	A,
+	A,
+	B,
+	A,
+	A,
+	B
+};
+void set_period(Player * self, int c) {
+	self->period = c;
+}
+
+void inc_volume(Player * self, int c) {
+	if(self->muted){
+		SCI_WRITE( & sci0, "\nVolume muted");
+		return;
+	}
+	char valprint[10] = {
+        0
+    };
+	if(self->volume == 20){
+		SCI_WRITE( & sci0, "\nVolume already capped at 20");
+	}else{
+		self->volume++;
+		SCI_WRITE( & sci0, "\nVolume at:");
+		snprintf(valprint, 10, "%d", self -> volume);
+		SCI_WRITE( & sci0, valprint);
+	}
+	
+}
+
+void dec_volume(Player * self, int c) {
+	if(self->muted){
+		SCI_WRITE( & sci0, "\nVolume muted");
+		return;
+	}
+	char valprint[10] = {
+        0
+    };
+	if(self->volume == 0){
+		SCI_WRITE( & sci0, "\nVolume already muted at 0");
+	}else{
+		self->volume--;
+		SCI_WRITE( & sci0, "\nVolume at:");
+		snprintf(valprint, 10, "%d", self -> volume);
+		SCI_WRITE( & sci0, valprint);
+	}
+	
+}
+
+void mute_volume(Player * self, int c){
+	if(self->muted){
+		SCI_WRITE( & sci0, "\nUnmuted");
+		self->volume = self->volume_restore;
+		self->muted = 0;
+	}else{
+		SCI_WRITE( & sci0, "\nMuted");
+		self->volume_restore = self->volume;
+		self->volume = 0;
+		self->muted = 1;
+	}
+}
+
+void stop_play(Player * self, int c) {
+	self->stop = 1;
+}
+
+void set_key(Controller * self, int c) {
+	self->key = c;
+}
+
+void set_tempo(Controller * self, int c) {
+	self->tempo = c;
+}
+
+
 void reader(App * self, int c) {
     char valprint[10] = {
         0
     };
-    SCI_WRITE( & sci0, "\nControl - Volume: w/s/m - Background: q/a/z: ");
-    // Volume up
-    if ((char) c == 'w') {
-        if (self -> muted == 1) {
-            SCI_WRITE( & sci0, "Volume Muted");
-            return;
-        }
-        int cvol = self -> volume;
-        if (cvol != 0x14) {
-            self -> volume = cvol + 1;
-            snprintf(valprint, 10, "%d", self -> volume);
-            SCI_WRITE( & sci0, "\nVolume increased to: ");
-            SCI_WRITE( & sci0, valprint);
-            SCI_WRITE( & sci0, "\0");
-        }
-    }
-    // Volume down
-    if ((char) c == 's') {
-        if (self -> muted == 1) {
-            SCI_WRITE( & sci0, "Volume Muted");
-            return;
-        }
-
-        int cvol = self -> volume;
-        if (cvol != 0x1) {
-            self -> volume = cvol - 1;
-            snprintf(valprint, 10, "%d", self -> volume);
-            SCI_WRITE( & sci0, "Volume decreased to: ");
-            SCI_WRITE( & sci0, valprint);
-            SCI_WRITE( & sci0, "\n");
-        }
-    }
-    // Mute
-    if ((char) c == 'm') {
-
-        if (self -> muted == 0) {
-            self -> mutevalue = self -> volume;
-            self -> muted = 1;
-            self -> volume = 0x0;
-            SCI_WRITE( & sci0, "Volume Muted \n");
-        } else {
-            self -> muted = 0;
-            self -> volume = self -> mutevalue;
-            SCI_WRITE( & sci0, "Volume Unmuted \n");
-        }
-    }
-    if ((char) c == 'q') {
-        Background * back = (Background * ) self -> backgroundpnt;
-        int background_lr = SYNC(back, read_background_lr, NULL);
-        background_lr += 500;
-        SYNC(back, set_background_lr, background_lr);
-        snprintf(valprint, 10, "%d", background_lr);
-        SCI_WRITE( & sci0, "\nBackground increased to: ");
-        SCI_WRITE( & sci0, valprint);
-        SCI_WRITE( & sci0, "\0");
-    }
-    if ((char) c == 'a') {
-        Background * back = (Background * ) self -> backgroundpnt;
-         int background_lr = SYNC(back, read_background_lr, NULL);
-        background_lr -= 500;
-        SYNC(back, set_background_lr, background_lr);
-        snprintf(valprint, 10, "%d", background_lr);
-        SCI_WRITE( & sci0, "\nBackground decreased to: ");
-        SCI_WRITE( & sci0, valprint);
-        SCI_WRITE( & sci0, "\0");
-    }
-    if ((char) c == 'z') {
-        Background * back = (Background * ) self -> backgroundpnt;
-        if (self -> deadline > 0) {
-            self -> deadline = USEC(0);
-            SYNC(back, set_background_deadline, 0);
-            } else {
-            self -> deadline = USEC(100);
-            SYNC(back, set_background_deadline, 1300);
-        }
-    }
+	if(self -> mode == 0) {
+		SCI_WRITE( & sci0, "\nControl - Volume: w/s/m - Background: q/a/z: ");
+		// Volume up
+		if ((char) c == 'w') {
+			SYNC(self->player_pointer, inc_volume, 123);
+		}
+		// Volume down
+		if ((char) c == 's') {
+			SYNC(self->player_pointer, dec_volume, 123);
+		}
+		// Mute
+		if ((char) c == 'm') {
+			SYNC(self->player_pointer, mute_volume, 123);
+		}
+		if ((char) c == 't') {
+			self->mode = 1;
+			SCI_WRITE( & sci0, "\nInput mode Tempo");
+		}
+		if ((char) c == 'k') {
+			self->mode = 2;
+			SCI_WRITE( & sci0, "\nInput mode Key");
+		}
+	}
+	/// Tempo mode
+	else if( self -> mode == 1 || self -> mode == 2){
+		if(self -> mode == 1){
+			SCI_WRITE( & sci0, "\nTempo mode");
+		}else {
+			SCI_WRITE( & sci0, "\nKey mode");
+		}
+		if ((char) c == 'e') {
+			if(self -> mode == 1){
+				SCI_WRITE( & sci0, "\nTempo set to: ");
+				SCI_WRITE( & sci0, self->buffer);
+				int tempo_change = atoi(self->buffer);
+				if(tempo_change < 60 || tempo_change > 240){
+					SCI_WRITE( & sci0, "\nTempo range is 60 - 240. Input a valid tempo.");
+					return;
+				}
+				SYNC(self->controller_pointer, set_tempo, tempo_change);
+			}else {
+				SCI_WRITE( & sci0, "\nKey set to: ");
+				SCI_WRITE( & sci0, self->buffer);
+				int key_change = atoi(self->buffer);
+				if(key_change < -5 || key_change > 5){
+					SCI_WRITE( & sci0, "\nKey range is -5 - 5. Input a valid key.");
+					return;
+				}
+				SYNC(self->controller_pointer, set_key, key_change);
+			}
+			for(int i = 0; i <20; i++){
+				self->buffer[i] = 0;
+			}
+			self->buffer_pointer = 0;
+			self->mode = 0;
+			SCI_WRITE( & sci0, "\nControl - Volume: w/s/m - Background: q/a/z: ");
+		}else {
+			self->buffer[self->buffer_pointer] = c;
+			SCI_WRITE( & sci0, "\nInputted char: ");
+			sci_writechar(&sci0, c);
+			self->buffer_pointer++;
+		}
+	}
 
     SCI_WRITE( & sci0, "\n");
 }
 
-void set_background_lr(Background * self, int lr){
-    self->background_loop_range = lr;
-}
+//##################### PLAYER ####################
 
-int read_background_lr(Background * self, int lr){
-    return self->background_loop_range;
-}
-
-int set_background_deadline(Background * self, int dl){
-    self->deadline = dl;
-}
-
-void play(App * self, int c) {
-    /*char valprint[10] = {
-        0
-    };
-    Time time1 = CURRENT_OFFSET();
-    
-	for (int i = 0; i < 100; i++) {
-    */
+void play(Player * self, int c) {
+	if(self->stop){
+		self->stop = 0;
+		return;
+	}
+	
     if (self -> flip == 0) {
             self -> flip = 1;
             * self -> spointer = self -> volume;
@@ -262,73 +354,46 @@ void play(App * self, int c) {
             self -> flip = 0;
             * self -> spointer = 0x0;
         }
-    //}
-   /* Time time2 = CURRENT_OFFSET();
-    Time value = time2 - time1;
-    if (self -> countt < 500) {
-        self -> countt = self -> countt + 1;
-        self -> sum = self -> sum + value;
-        if (value > self -> max) {
-            self -> max = value;
-        }
-    } else if (self -> countt == 500) {
-        self -> max = USEC_OF(self -> max);
-
-        self -> countt += 1;
-        int average = self -> sum / 500;
-        average = USEC_OF(average);
-        SCI_WRITE( & sci0, "\nMax was found at: ");
-        snprintf(valprint, 10, "%d", (int) self -> max);
-        SCI_WRITE( & sci0, valprint);
-        SCI_WRITE( & sci0, "\nAverage was found at: ");
-        snprintf(valprint, 10, "%d", average);
-        SCI_WRITE( & sci0, valprint);
-    }*/
-    SEND(USEC(self -> period), self -> deadline, self, play, 123);
+    AFTER(USEC(self -> period), self, play, 123);
 }
-void background_task(Background * self, int c) {
-    /*char valprint[10] = {
-        0
-    };
-    //Time time1 = CURRENT_OFFSET();
-    T_RESET(&self->timer);
-    */
-	for (int i = 0; i < self -> background_loop_range; i++) {}
-    /*Time time2 = CURRENT_OFFSET();
-    //Time value = T_SAMPLE( & self -> timer);
-    Time value = time2 - time1;
-    if (self -> count < 500) {
-        self -> count = self -> count + 1;
-        self -> sum = self -> sum + value;
-        if (value > self -> max) {
-            self -> max = value;
-        }
-    } else if (self -> count == 500) {
-        self -> max = USEC_OF((self -> max));
-        self -> count += 1;
-        int average = self -> sum / 500;
-        average = USEC_OF((average));
-        SCI_WRITE( & sci0, "\nMax was found at: ");
-        snprintf(valprint, 10, "%d", (int) self -> max);
-        SCI_WRITE( & sci0, valprint);
 
-        SCI_WRITE( & sci0, "\nAverage was found at: ");
-        snprintf(valprint, 10, "%d", average);
-        SCI_WRITE( & sci0, valprint);
+//##################### CONTROLLER ####################
 
-    }*/
-    SEND(USEC(1300), self -> deadline, self, background_task, 123);
+void calc_next_note(Controller * self, int c){
+	if(self->flip == 1){
+		// If there is a silence at the end of the note
+		ASYNC(self->player_pointer, stop_play, 123);
+		self->flip = 0;
+		// TODO: Change after call to accomodate for different tempos
+		AFTER(MSEC(50), self, calc_next_note, 123);
+		self->note_index = (self->note_index + 1) % 32;
+	}else{
+		// Set the period
+		int next_period = periods[notes[self->note_index]+10+self->key];
+		SYNC(self->player_pointer, set_period, next_period);
+		ASYNC(self->player_pointer, play, 123);
+		self->flip = 1;
+		float play_length = (1.0/((float)self->tempo/120.0)) * 450;
+		if(lengths[self->note_index] == B){
+			play_length = play_length*2;
+		}
+		if(lengths[self->note_index] == C){
+			play_length = play_length/2;
+		}
+		AFTER(MSEC((int)play_length), self, calc_next_note, 123);
+	}
+	
 }
+
 
 void startApp(App * self, int arg) {
     CANMsg msg;
 
-    self -> backgroundpnt = (int) & background;
+   
     CAN_INIT( & can0);
     SCI_INIT( & sci0);
     SCI_WRITE( & sci0, "Hello, hello...\n");
-    play(self, 123);
-    SYNC(&background, background_task, NULL);
+    ASYNC(&controller, calc_next_note, 123);
     msg.msgId = 1;
     msg.nodeId = 1;
     msg.length = 6;
