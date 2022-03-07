@@ -1,12 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Session Name="C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\TinyTimber.workspace">
-  <int Value="0" Name="m_selectedTab"/>
+  <int Value="2" Name="m_selectedTab"/>
   <wxString Value="C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\TinyTimber.workspace" Name="m_workspaceName"/>
   <TabInfoArray Name="TabInfoArray">
     <TabInfo>
       <wxString Value="C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\application.c" Name="FileName"/>
-      <int Value="82" Name="FirstVisibleLine"/>
-      <int Value="113" Name="CurrentLine"/>
+      <int Value="76" Name="FirstVisibleLine"/>
+      <int Value="94" Name="CurrentLine"/>
+      <wxArrayString Name="Bookmarks"/>
+      <IntVector Name="CollapsedFolds">
+        <IntVectorItem Value="202"/>
+        <IntVectorItem Value="206"/>
+        <IntVectorItem Value="225"/>
+        <IntVectorItem Value="257"/>
+        <IntVectorItem Value="261"/>
+      </IntVector>
+    </TabInfo>
+    <TabInfo>
+      <wxString Value="C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\canTinyTimber.c" Name="FileName"/>
+      <int Value="0" Name="FirstVisibleLine"/>
+      <int Value="108" Name="CurrentLine"/>
+      <wxArrayString Name="Bookmarks"/>
+      <IntVector Name="CollapsedFolds"/>
+    </TabInfo>
+    <TabInfo>
+      <wxString Value="C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\canTinyTimber.h" Name="FileName"/>
+      <int Value="0" Name="FirstVisibleLine"/>
+      <int Value="0" Name="CurrentLine"/>
       <wxArrayString Name="Bookmarks"/>
       <IntVector Name="CollapsedFolds"/>
     </TabInfo>

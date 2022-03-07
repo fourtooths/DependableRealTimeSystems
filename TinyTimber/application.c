@@ -8,17 +8,17 @@
 
 #include <stdio.h>
 
-/* ###################### PogChamp Manual ##########################
- * w - Volume up
- * s - Volume down
- * q - Background up
- * a - Background down
- * z - Toggle background
- * m - Toggle mute
- * */
-
-
-
+#define true 1
+#define false 0
+#define bool int
+#define MUTE (uchar)'m'
+#define VOLUP (uchar)'w'
+#define VOLDOWN (uchar)'s'
+#define TEMPO (uchar)'t'
+#define KEY (uchar)'k'
+#define PAUSE (uchar)'p'
+#define POS (uchar)1
+#define NEG (uchar)0
 
 typedef struct {
 	Object super;
@@ -48,6 +48,7 @@ typedef struct {
 	int note_index;
 	Player * player_pointer;
 	int flip;
+	bool paused;
 } Controller;
 
 Controller controller = {
@@ -57,6 +58,7 @@ Controller controller = {
 	0,
 	&player,
 	0,
+	true,
 
 };
 
@@ -83,6 +85,7 @@ App app = {
 	{0},
 };
 
+bool leader = true;
 
 void reader(App * , int);
 void receiver(App * , int);
@@ -91,11 +94,61 @@ Serial sci0 = initSerial(SCI_PORT0, & app, reader);
 
 Can can0 = initCan(CAN_PORT0, & app, receiver);
 
+void inc_volume(Player * self, int c);
+void dec_volume(Player * self, int c);
+void mute_volume(Player * self, int c);
+void set_key(Controller * self, int c);
+void set_tempo(Controller * self, int c);
+void pause_play(Controller * self, int c);
+
 void receiver(App * self, int unused) {
     CANMsg msg;
     CAN_RECEIVE( & can0, & msg);
-    SCI_WRITE( & sci0, "Can msg received: ");
+    SCI_WRITE( & sci0, "\nCan msg received: ");
     SCI_WRITE( & sci0, msg.buff);
+	
+	switch(msg.buff[0]){
+		case MUTE :
+			SCI_WRITE( & sci0, "\nMute msg received: ");
+			if(!leader){
+				ASYNC(self->player_pointer, mute_volume, 123);
+			}
+			break;
+		case VOLUP :
+			SCI_WRITE( & sci0, "\nVolume Up msg received: ");
+			if(!leader){
+				ASYNC(self->player_pointer, inc_volume, 123);
+			}
+			break;
+		case VOLDOWN :
+			SCI_WRITE( & sci0, "\nVolume Down received: ");
+			if(!leader){
+				ASYNC(self->player_pointer, dec_volume, 123);
+			}
+			break;
+		case TEMPO :
+			SCI_WRITE( & sci0, "\nTempo msg received: ");
+			if(!leader){
+				ASYNC(self->controller_pointer, set_tempo, (int)msg.buff[1]);
+			}
+			break;
+		case KEY :
+			SCI_WRITE( & sci0, "\nKey msg received: ");
+			if(!leader){
+				int number = (int)msg.buff[2];
+				if(msg.buff[1] == NEG){
+					number *= -1;
+				}
+				ASYNC(self->player_pointer, set_tempo, number);
+			}
+			break;
+		case PAUSE :
+			SCI_WRITE( & sci0, "\nPause msg received: ");
+			if(!leader){
+				ASYNC(self->player_pointer, pause_play, 123);
+			}
+			break;
+	}
 }
 
 int notes[] = {
@@ -200,59 +253,84 @@ Beat lengths[] = {
 	A,
 	B
 };
+
 void set_period(Player * self, int c) {
 	self->period = c;
 }
 
 void inc_volume(Player * self, int c) {
-	if(self->muted){
-		SCI_WRITE( & sci0, "\nVolume muted");
-		return;
+	if(leader){
+		if(self->muted){
+			SCI_WRITE( & sci0, "\nVolume muted");
+			return;
+		}
+		char valprint[10] = {
+			0
+		};
+		if(self->volume == 20){
+			SCI_WRITE( & sci0, "\nVolume already capped at 20");
+		}else{
+			self->volume++;
+			SCI_WRITE( & sci0, "\nVolume at:");
+			snprintf(valprint, 10, "%d", self -> volume);
+			SCI_WRITE( & sci0, valprint);
+		}
 	}
-	char valprint[10] = {
-        0
-    };
-	if(self->volume == 20){
-		SCI_WRITE( & sci0, "\nVolume already capped at 20");
-	}else{
-		self->volume++;
-		SCI_WRITE( & sci0, "\nVolume at:");
-		snprintf(valprint, 10, "%d", self -> volume);
-		SCI_WRITE( & sci0, valprint);
-	}
-	
+	CANMsg msg;
+	msg.msgId = 1;
+    msg.nodeId = 1;
+    msg.length = 1;
+    msg.buff[0] = VOLUP;
+    CAN_SEND( & can0, & msg);
 }
 
 void dec_volume(Player * self, int c) {
-	if(self->muted){
-		SCI_WRITE( & sci0, "\nVolume muted");
-		return;
+	if(leader) {
+		if(self->muted){
+			SCI_WRITE( & sci0, "\nVolume muted");
+			return;
+		}
+		char valprint[10] = {
+			0
+		};
+		if(self->volume == 0){
+			SCI_WRITE( & sci0, "\nVolume already muted at 0");
+		}else{
+			self->volume--;
+			SCI_WRITE( & sci0, "\nVolume at:");
+			snprintf(valprint, 10, "%d", self -> volume);
+			SCI_WRITE( & sci0, valprint);
+		}
 	}
-	char valprint[10] = {
-        0
-    };
-	if(self->volume == 0){
-		SCI_WRITE( & sci0, "\nVolume already muted at 0");
-	}else{
-		self->volume--;
-		SCI_WRITE( & sci0, "\nVolume at:");
-		snprintf(valprint, 10, "%d", self -> volume);
-		SCI_WRITE( & sci0, valprint);
-	}
+	
+	CANMsg msg;
+	msg.msgId = 1;
+    msg.nodeId = 1;
+    msg.length = 1;
+    msg.buff[0] = VOLDOWN;
+    CAN_SEND( & can0, & msg);
 	
 }
 
 void mute_volume(Player * self, int c){
-	if(self->muted){
-		SCI_WRITE( & sci0, "\nUnmuted");
-		self->volume = self->volume_restore;
-		self->muted = 0;
-	}else{
-		SCI_WRITE( & sci0, "\nMuted");
-		self->volume_restore = self->volume;
-		self->volume = 0;
-		self->muted = 1;
+	if(leader) {
+		if(self->muted){
+			SCI_WRITE( & sci0, "\nUnmuted");
+			self->volume = self->volume_restore;
+			self->muted = 0;
+		}else{
+			SCI_WRITE( & sci0, "\nMuted");
+			self->volume_restore = self->volume;
+			self->volume = 0;
+			self->muted = 1;
+		}
 	}
+	CANMsg msg;
+	msg.msgId = 1;
+    msg.nodeId = 1;
+    msg.length = 1;
+    msg.buff[0] = MUTE;
+    CAN_SEND( & can0, & msg);
 }
 
 void stop_play(Player * self, int c) {
@@ -260,20 +338,64 @@ void stop_play(Player * self, int c) {
 }
 
 void set_key(Controller * self, int c) {
-	self->key = c;
+	if(leader) {
+		self->key = c;
+	}
+	int sign = NEG;
+	if(c >= 0) {
+		sign = POS;
+	}
+	CANMsg msg;
+	msg.msgId = 1;
+    msg.nodeId = 1;
+    msg.length = 3;
+    msg.buff[0] = KEY;
+	msg.buff[1] = sign;
+	msg.buff[2] = (uchar) abs(c);
+    CAN_SEND( & can0, & msg);
 }
 
 void set_tempo(Controller * self, int c) {
-	self->tempo = c;
+	if(leader) {
+		self->tempo = c;
+	}
+	CANMsg msg;
+	msg.msgId = 1;
+    msg.nodeId = 1;
+    msg.length = 2;
+    msg.buff[0] = TEMPO;
+	msg.buff[1] = (uchar) c;
+    CAN_SEND( & can0, & msg);
 }
 
+void calc_next_note(Controller * self, int c);
+
+void pause_play(Controller * self, int c) {
+	if(leader) {
+		if(self->paused){
+			SCI_WRITE( & sci0, "\nUnpaused");
+			self->paused = false;
+			ASYNC(self, calc_next_note, 123);
+		}else{
+			SCI_WRITE( & sci0, "\nPaused");
+			self->paused = true;
+			ASYNC(self->player_pointer, stop_play, 123);
+		}
+	}
+	CANMsg msg;
+	msg.msgId = 1;
+    msg.nodeId = 1;
+    msg.length = 1;
+    msg.buff[0] = PAUSE;
+    CAN_SEND( & can0, & msg);
+}
 
 void reader(App * self, int c) {
-    char valprint[10] = {
-        0
-    };
+    //char valprint[10] = {
+    //    0
+    //};
 	if(self -> mode == 0) {
-		SCI_WRITE( & sci0, "\nControl - Volume: w/s/m - Background: q/a/z: ");
+		SCI_WRITE( & sci0, "\nControl - Volume: w/s/m - Background: q/a/z: - Tempo Mode: t - Key Mode: k - Play/Pause: p: - Toggle Slave/Leader: l");
 		// Volume up
 		if ((char) c == 'w') {
 			SYNC(self->player_pointer, inc_volume, 123);
@@ -286,16 +408,31 @@ void reader(App * self, int c) {
 		if ((char) c == 'm') {
 			SYNC(self->player_pointer, mute_volume, 123);
 		}
+		// Tempo
 		if ((char) c == 't') {
 			self->mode = 1;
 			SCI_WRITE( & sci0, "\nInput mode Tempo");
 		}
+		// Key
 		if ((char) c == 'k') {
 			self->mode = 2;
 			SCI_WRITE( & sci0, "\nInput mode Key");
 		}
+		// Pause/Play
+		if ((char) c == 'p') {
+			ASYNC(self->controller_pointer, pause_play, 123);
+		}
+		if ((char) c == 'l') {
+			if(leader){
+				SCI_WRITE( & sci0, "\nMode set to Slave");
+				leader = false;
+			}else{
+				SCI_WRITE( & sci0, "\nMode set to Leader");
+				leader = true;
+			}
+		}
 	}
-	/// Tempo mode
+	/// Tempo/Key mode
 	else if( self -> mode == 1 || self -> mode == 2){
 		if(self -> mode == 1){
 			SCI_WRITE( & sci0, "\nTempo mode");
@@ -380,10 +517,15 @@ void calc_next_note(Controller * self, int c){
 		if(lengths[self->note_index] == C){
 			play_length = play_length/2;
 		}
+		if(self->paused){
+			self->note_index = 0;
+			self->flip = 0;
+			return;
+		}
 		AFTER(MSEC((int)play_length), self, calc_next_note, 123);
 	}
-	
 }
+
 
 
 void startApp(App * self, int arg) {
@@ -393,7 +535,6 @@ void startApp(App * self, int arg) {
     CAN_INIT( & can0);
     SCI_INIT( & sci0);
     SCI_WRITE( & sci0, "Hello, hello...\n");
-    ASYNC(&controller, calc_next_note, 123);
     msg.msgId = 1;
     msg.nodeId = 1;
     msg.length = 6;
