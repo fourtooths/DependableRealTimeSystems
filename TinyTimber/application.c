@@ -51,6 +51,18 @@ Player player = {
 };
 
 typedef struct {
+	Object super;
+	bool paused;
+	int tempo;
+} LEDToggler;
+
+LEDToggler led_toggler = {
+	initObject(),
+	true,
+	120,
+};
+
+typedef struct {
     Object super;
     int tempo;
     int key;
@@ -58,6 +70,8 @@ typedef struct {
     Player * player_pointer;
     int flip;
     bool paused;
+	LEDToggler* led_toggler;
+	bool led_start;
 }
 Controller;
 
@@ -70,8 +84,11 @@ Controller controller = {
     player,
     0,
     true,
-
+	&led_toggler,
+	0,
 };
+
+
 
 typedef struct {
     Object super;
@@ -136,6 +153,24 @@ void button_held(App * self, int count);
 void button_interval(App * self, int c);
 void bounce_refusal(App * self, int c);
 void tap_tempo(App * self, int c);
+void tap_set_tempo(Controller * self, int c);
+
+// #################### LED ########
+void set_led_tempo(LEDToggler* self, int c) {
+	self -> tempo = c;
+}
+
+void set_led_pause(LEDToggler* self, int c){
+	self -> paused = c;
+}
+
+void toggle_led(LEDToggler* self, int c){
+	if(self->paused)
+		return;
+	SIO_TOGGLE(&sio0);
+	float play_length = (1.0 / ((float) self -> tempo / 120.0)) * 500.0;
+	AFTER(MSEC((int) play_length/2), self, toggle_led, 123);
+}
 
 // ############## USER BUTTON METHODS ###############
 void button(App * self, int c) {
@@ -161,6 +196,10 @@ void button_held(App * self, int count) {
     char valprint[50] = {
         0
     };
+	if(count == 100) {
+			SCI_WRITE( & sci0, "\nEntered Hold Mode");
+			ASYNC(self->controller_pointer, set_tempo, 120);
+	}
     if (SIO_READ( & sio0) == 1) {
 		if(count >= 100){
 			SCI_WRITE( & sci0, "\nHeld for ");
@@ -187,7 +226,7 @@ void button_interval(App * self, int c) {
     Time time = T_SAMPLE( & self -> timer);
 	
     SCI_WRITE( & sci0, "\nDifference: ");
-    snprintf(valprint, 50, "%ld", (time - self -> last_time));
+    snprintf(valprint, 50, "%ld", (time - self -> last_time)/100);
 	self->time_pointer++;
 	self->times[self->time_pointer % 3] = (time - self -> last_time);
     SCI_WRITE( & sci0, valprint);
@@ -200,25 +239,41 @@ void tap_tempo(App * self, int c){
         0
     };
 	// MSEC(1000) used becuase of the timestamps being in base timeunit
-	if(abs(self->times[0] - self->times[1]) > MSEC(1000)){
+	if(abs(self->times[0] - self->times[1]) > MSEC(100)){
 		return;
 	}
-	if(abs(self->times[1] - self->times[2]) > MSEC(1000)){
+	if(abs(self->times[1] - self->times[2]) > MSEC(100)){
 		return;
 	}
-	if(abs(self->times[0] - self->times[2]) > MSEC(1000)){
+	if(abs(self->times[0] - self->times[2]) > MSEC(100)){
 		return;
 	}
+	SCI_WRITE( & sci0, "\nValues: ");
+	snprintf(valprint, 50, "%ld", self->times[0]);
+    SCI_WRITE( & sci0, valprint);
+	SCI_WRITE( & sci0, " : ");
+	snprintf(valprint, 50, "%ld", self->times[1]);
+    SCI_WRITE( & sci0, valprint);
+	SCI_WRITE( & sci0, " : ");
+	snprintf(valprint, 50, "%ld", self->times[2]);
+    SCI_WRITE( & sci0, valprint);
+	SCI_WRITE( & sci0, " --- \n ");
+	
 	
 	SCI_WRITE( & sci0, "\nTap Tempo Detected ");
-	int time_average = (self->times[0] + self->times[1] + self->times[2])/3;
+	Time time_average = ((self->times[0] + self->times[1] + self->times[2])/3)/100;
 	SCI_WRITE( & sci0, "\nTest1: ");
-    snprintf(valprint, 50, "%d", time_average);
+    snprintf(valprint, 50, "%ld", time_average);
     SCI_WRITE( & sci0, valprint);
-	self->times[0] = 0;
-	self->times[1] = 0;
-	self->times[2] = 0;
-	
+	//self->times[0] = 0;
+	//self->times[1] = 0;
+	//self->times[2] = 0;
+	ASYNC(self->controller_pointer, tap_set_tempo, (int)(60000/time_average));
+	SCI_WRITE( & sci0, " Set the tempo to: ");
+	snprintf(valprint, 50, "%d", (int) (60000/time_average));
+    SCI_WRITE( & sci0, valprint);
+	SCI_WRITE( & sci0, "\n ");
+
 }
 
 // ################ RECEIVER ##################
@@ -257,7 +312,7 @@ void receiver(App * self, int unused) {
             if (msg.buff[1] == NEG) {
                 number *= -1;
             }
-            ASYNC(self -> player_pointer, set_tempo, number);
+            ASYNC(self -> controller_pointer, set_key, number);
         }
         break;
     case PAUSE:
@@ -457,6 +512,9 @@ void set_key(Controller * self, int c) {
 
 void set_tempo(Controller * self, int c) {
     self -> tempo = c;
+	SYNC(self->led_toggler, set_led_tempo, c);
+	SYNC(self->led_toggler, set_led_pause, true);
+	self->led_start = true;
 }
 
 void calc_next_note(Controller * self, int c);
@@ -465,12 +523,19 @@ void pause_play(Controller * self, int c) {
     if (self -> paused) {
         SCI_WRITE( & sci0, "\nUnpaused");
         self -> paused = false;
-        ASYNC(self, calc_next_note, 123);
+        ASYNC(self, calc_next_note, 1);
     } else {
         SCI_WRITE( & sci0, "\nPaused");
         self -> paused = true;
+		ASYNC(self->led_toggler, set_led_pause, true);
         ASYNC(self -> player_pointer, stop_play, 123);
     }
+}
+
+void tap_set_tempo(Controller * self, int c ){
+	if(c <= 300 && c >= 30){
+		ASYNC(self, set_tempo, c);
+	}
 }
 
 // #################### READER ####################
@@ -614,23 +679,33 @@ void calc_next_note(Controller * self, int c) {
         self -> note_index = (self -> note_index + 1) % 32;
     } else {
         // Set the period
+		if(c == 1 || self -> led_start){
+			if(!SIO_READ(&sio0)){
+				SIO_TOGGLE(&sio0);
+			}
+			ASYNC(self->led_toggler, set_led_pause, false);
+			ASYNC(self->led_toggler, toggle_led, 123);
+			self->led_start = false;
+		}
         int next_period = periods[notes[self -> note_index] + 10 + self -> key];
         SYNC(self -> player_pointer, set_period, next_period);
         ASYNC(self -> player_pointer, play, 123);
         self -> flip = 1;
-        float play_length = (1.0 / ((float) self -> tempo / 120.0)) * 450;
+        float play_length = (1.0 / ((float) self -> tempo / 120.0)) * 500.0;
+		int led_length = play_length;
         if (lengths[self -> note_index] == B) {
-            play_length = play_length * 2;
+            play_length = play_length * 2.0;
         }
         if (lengths[self -> note_index] == C) {
-            play_length = play_length / 2;
+            play_length = play_length / 2.0;
         }
         if (self -> paused) {
             self -> note_index = 0;
             self -> flip = 0;
             return;
         }
-        AFTER(MSEC((int) play_length), self, calc_next_note, 123);
+        AFTER(MSEC((int) play_length-50), self, calc_next_note, 123);
+		AFTER(MSEC((int) led_length/2), self, toggle_led, 123);
     }
 }
 
@@ -640,6 +715,7 @@ void startApp(App * self, int arg) {
     CAN_INIT( & can0);
     SCI_INIT( & sci0);
     SIO_INIT( & sio0);
+	SIO_TOGGLE(& sio0);
     SCI_WRITE( & sci0, "Hello, hello...\n");
     msg.msgId = 1;
     msg.nodeId = 1;
