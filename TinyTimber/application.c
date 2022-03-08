@@ -8,6 +8,9 @@
 
 #include <stdio.h>
 
+#include <sioTinyTimber.h>
+#include <sioTinyTimber.c>
+
 #define true 1
 #define false 0
 #define bool int
@@ -74,6 +77,9 @@ typedef struct {
     int mode;
     int buffer_pointer;
     char buffer[20];
+	Time last_time;
+	int bounce;
+	Timer timer;
 }
 App;
 
@@ -90,16 +96,24 @@ App app = {
     {
         0
     },
+	0,
+	0,
+	initTimer(),
 };
 
 bool leader = true;
 
 void reader(App * , int);
 void receiver(App * , int);
+void button(App *, int);
 
 Serial sci0 = initSerial(SCI_PORT0, & app, reader);
 
 Can can0 = initCan(CAN_PORT0, & app, receiver);
+
+SysIO sio0 = initSysIO(SIO_PORT0, & app, button);
+
+
 
 void inc_volume(Player * self, int c);
 void dec_volume(Player * self, int c);
@@ -107,6 +121,77 @@ void mute_volume(Player * self, int c);
 void set_key(Controller * self, int c);
 void set_tempo(Controller * self, int c);
 void pause_play(Controller * self, int c);
+void button_held(App * self, int count);
+void button_interval(App * self, int c);
+void bounce_refusal(App * self, int c);
+
+void button(App * self, int c){
+	if(self->bounce == 1){
+		SCI_WRITE( & sci0, "\nBounce Refused");
+		return;
+	}else{
+		SCI_WRITE( & sci0, "\nBounce to True");
+		self->bounce = 1;
+		ASYNC(self, bounce_refusal, 123);
+	}
+	
+	SCI_WRITE( & sci0, "\nPressed button");
+	ASYNC(self, button_held, 0);
+	ASYNC(self, button_interval, 123);
+}
+
+void bounce_refusal(App * self, int c){
+	SCI_WRITE( & sci0, "\nBounce Called");
+	if(c == 1){
+		SCI_WRITE( & sci0, "\nBounce to false");
+		self->bounce = 0;
+	}else {
+		SCI_WRITE( & sci0, "\nAfter button");
+		AFTER(MSEC(1000), self, bounce_refusal, 1);
+	}
+	
+	
+	
+}
+
+void button_held(App *self, int count){
+	if(SIO_READ(&sio0) == 1){
+		return;
+	}
+	if(count >= 100){
+		SCI_WRITE( & sci0, "\nHeld for a second");
+		return;
+	}
+	count += 1;
+	AFTER(MSEC(10), self, button_held, count);
+	
+}
+
+
+void button_interval(App * self, int c){
+	char valprint[50] = {
+        0
+    };
+	Time time = T_SAMPLE(&self->timer);
+	SCI_WRITE( & sci0, "\nTimer sampled at ");
+	snprintf(valprint, 50, "%ld",  time);
+	SCI_WRITE( & sci0,valprint);
+	SCI_WRITE( & sci0, "\nLast Time: ");
+	snprintf(valprint, 50, "%ld",self->last_time);
+	SCI_WRITE( & sci0,valprint);
+	SCI_WRITE( & sci0, "\nDifference : ");
+	snprintf(valprint, 50, "%ld",  time - self->last_time);
+	SCI_WRITE( & sci0,valprint);
+	SCI_WRITE( & sci0, "\nDifference MSEC: ");
+	/// Kms msec of does fractions :)
+	snprintf(valprint, 50, "%d",  MSEC_OF((time - self->last_time)));
+	SCI_WRITE( & sci0,valprint);
+	self -> last_time = time;
+
+	
+}
+
+
 
 void receiver(App * self, int unused) {
     CANMsg msg;
@@ -520,6 +605,7 @@ void startApp(App * self, int arg) {
 
     CAN_INIT( & can0);
     SCI_INIT( & sci0);
+	SIO_INIT(&sio0);
     SCI_WRITE( & sci0, "Hello, hello...\n");
     msg.msgId = 1;
     msg.nodeId = 1;
@@ -536,6 +622,8 @@ void startApp(App * self, int arg) {
 int main() {
     INSTALL( & sci0, sci_interrupt, SCI_IRQ0);
     INSTALL( & can0, can_interrupt, CAN_IRQ0);
-    TINYTIMBER( & app, startApp, 0);
+	INSTALL( & sio0, sio_interrupt, SIO_IRQ0); 
+    TINYTIMBER( & app, startApp, 123);
+	
     return 0;
 }

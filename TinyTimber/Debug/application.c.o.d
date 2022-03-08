@@ -8,7 +8,11 @@ Debug/application.c.o: application.c TinyTimber.h \
  sciTinyTimber.h \
  C:/Users/aaron/Documents/RealTimeSystems/TinyTimber/driver/inc/stm32f4xx_usart.h \
  canTinyTimber.h \
- C:/Users/aaron/Documents/RealTimeSystems/TinyTimber/driver/inc/stm32f4xx_can.h
+ C:/Users/aaron/Documents/RealTimeSystems/TinyTimber/driver/inc/stm32f4xx_can.h \
+ sioTinyTimber.h \
+ C:/Users/aaron/Documents/RealTimeSystems/TinyTimber/driver/inc/stm32f4xx_gpio.h \
+ C:/Users/aaron/Documents/RealTimeSystems/TinyTimber/driver/inc/stm32f4xx_exti.h \
+ sioTinyTimber.c TinyTimber.h sioTinyTimber.h
 
 TinyTimber.h:
 
@@ -31,3 +35,15 @@ C:/Users/aaron/Documents/RealTimeSystems/TinyTimber/driver/inc/stm32f4xx_usart.h
 canTinyTimber.h:
 
 C:/Users/aaron/Documents/RealTimeSystems/TinyTimber/driver/inc/stm32f4xx_can.h:
+
+sioTinyTimber.h:
+
+C:/Users/aaron/Documents/RealTimeSystems/TinyTimber/driver/inc/stm32f4xx_gpio.h:
+
+C:/Users/aaron/Documents/RealTimeSystems/TinyTimber/driver/inc/stm32f4xx_exti.h:
+
+sioTinyTimber.c:
+
+TinyTimber.h:
+
+sioTinyTimber.h:

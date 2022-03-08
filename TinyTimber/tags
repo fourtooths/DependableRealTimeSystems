@@ -1,3 +1,20 @@
-__SYSTEM_STM32F4XX_H	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\device\inc\system_stm32f4xx.h	/^#define __SYSTEM_STM32F4XX_H$/;"	macro	line:40
-SystemInit	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\device\inc\system_stm32f4xx.h	/^extern void SystemInit(void);$/;"	prototype	line:86	signature:(void)	returns:void 
-SystemCoreClockUpdate	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\device\inc\system_stm32f4xx.h	/^extern void SystemCoreClockUpdate(void);$/;"	prototype	line:87	signature:(void)	returns:void 
+SIO_TINYT_H	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\sioTinyTimber.h	/^#define SIO_TINYT_H$/;"	macro	line:2
+super	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\sioTinyTimber.h	/^    Object super;$/;"	member	line:9	struct:__anon10	access:public
+port	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\sioTinyTimber.h	/^    GPIO_TypeDef *port;$/;"	member	line:10	struct:__anon10	access:public
+obj	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\sioTinyTimber.h	/^    Object *obj;$/;"	member	line:11	struct:__anon10	access:public
+meth	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\sioTinyTimber.h	/^    Method meth;$/;"	member	line:12	struct:__anon10	access:public
+SysIO	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\sioTinyTimber.h	/^typedef struct {     Object super;     GPIO_TypeDef *port;     Object *obj;     Method meth; } SysIO; $/;"	typedef	line:13	typeref:struct:__anon10
+initSysIO	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\sioTinyTimber.h	/^#define initSysIO(port, obj, meth) \\$/;"	macro	line:15
+SIO_PORT0	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\sioTinyTimber.h	/^#define SIO_PORT0   (GPIO_TypeDef *)(GPIOB)$/;"	macro	line:18
+SIO_IRQ0	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\sioTinyTimber.h	/^#define	SIO_IRQ0	IRQ_EXTI9_5$/;"	macro	line:19
+sio_init	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\sioTinyTimber.h	/^void sio_init(SysIO *sio, int unused);$/;"	prototype	line:21	signature:(SysIO *sio, int unused)	returns:void 
+sio_read	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\sioTinyTimber.h	/^int sio_read(SysIO *sio, int unused);$/;"	prototype	line:22	signature:(SysIO *sio, int unused)	returns:int 
+sio_write	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\sioTinyTimber.h	/^void sio_write(SysIO *sio, int val);$/;"	prototype	line:23	signature:(SysIO *sio, int val)	returns:void 
+sio_toggle	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\sioTinyTimber.h	/^void sio_toggle(SysIO *sio, int unused);$/;"	prototype	line:24	signature:(SysIO *sio, int unused)	returns:void 
+sio_trig	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\sioTinyTimber.h	/^void sio_trig(SysIO *sio, int rise);$/;"	prototype	line:25	signature:(SysIO *sio, int rise)	returns:void 
+SIO_INIT	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\sioTinyTimber.h	/^#define SIO_INIT(sio)       SYNC(sio, sio_init, 0)$/;"	macro	line:27
+SIO_READ	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\sioTinyTimber.h	/^#define SIO_READ(sio)       SYNC(sio, sio_read, 0)$/;"	macro	line:28
+SIO_WRITE	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\sioTinyTimber.h	/^#define SIO_WRITE(sio,val)  SYNC(sio, sio_write, val)$/;"	macro	line:29
+SIO_TOGGLE	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\sioTinyTimber.h	/^#define SIO_TOGGLE(sio)     SYNC(sio, sio_toggle, 0)$/;"	macro	line:30
+SIO_TRIG	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\sioTinyTimber.h	/^#define SIO_TRIG(sio,rise)  SYNC(sio, sio_trig, rise)$/;"	macro	line:31
+sio_interrupt	C:\Users\aaron\Documents\RealTimeSystems\TinyTimber\sioTinyTimber.h	/^int sio_interrupt(SysIO *self, int unused);$/;"	prototype	line:33	signature:(SysIO *self, int unused)	returns:int 
