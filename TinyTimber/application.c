@@ -198,6 +198,9 @@ void button_held(App * self, int count) {
     };
 	if(count == 100) {
 			SCI_WRITE( & sci0, "\nEntered Hold Mode");
+	}
+	if(count == 200) {
+			SCI_WRITE( & sci0, "\nReset Tempo");
 			ASYNC(self->controller_pointer, set_tempo, 120);
 	}
     if (SIO_READ( & sio0) == 1) {
