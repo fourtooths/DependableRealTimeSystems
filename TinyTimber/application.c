@@ -23,6 +23,7 @@
 #define TEMPO (uchar)'t'
 #define KEY (uchar)'k'
 #define PAUSE (uchar)'p'
+#define RESTART (uchar)'r'
 #define POS (uchar)1
 #define NEG (uchar)0
 
@@ -59,6 +60,7 @@ typedef struct
     Player *player_pointer;
     int flip;
     bool paused;
+    bool restart;
     int tempo_change;
     int led_on;
 } Controller;
@@ -71,6 +73,7 @@ Controller controller = {
     &player,
     0,
     true,
+    false,
     0,
     0,
 };
@@ -78,6 +81,7 @@ Controller controller = {
 typedef struct {
     uchar node_id;
     bool is_leader;
+    int n_nodes;
 } NodeState;
 
 typedef struct
@@ -112,7 +116,7 @@ App app = {
     initTimer(),
     {0},
     0,
-    {0, true},
+    {0, true, 0},
 };
 
 // ################## METHOD DEFINITIONS #############
@@ -135,6 +139,7 @@ void mute_volume(Player *self, int c);
 void set_key(Controller *self, int c);
 void set_tempo(Controller *self, int c);
 void pause_play(Controller *self, int c);
+void restart(Controller *self, int c);
 void tap_set_tempo(Controller *self, int c);
 void led_timeout(Controller *self, int c);
 
@@ -163,14 +168,14 @@ void bounce_refusal(App *self, int c) {
 }
 
 void button_held(App *self, int count) {
-    char valprint[50] = {
-        0};
+    char valprint[50] = {0};
     if (count == 100) {
         SCI_WRITE(&sci0, "\nEntered Hold Mode");
     }
     if (count == 200) {
-        SCI_WRITE(&sci0, "\nReset Tempo");
+        SCI_WRITE(&sci0, "\nReset Key and Tempo");
         ASYNC(self->controller_pointer, set_tempo, 120);
+        ASYNC(self->controller_pointer, set_key, 0);
     }
     if (SIO_READ(&sio0) == 1) {
         if (count >= 100) {
@@ -256,7 +261,7 @@ void leader_receiver(App *self, int unused) {
     CANMsg msg;
     CAN_RECEIVE(&can0, &msg);
     switch (msg.buff[0]) {
-    case MUTE:
+    /*case MUTE:
         SCI_WRITE(&sci0, "\nMute msg received: ");
         break;
     case VOLUP:
@@ -264,7 +269,7 @@ void leader_receiver(App *self, int unused) {
         break;
     case VOLDOWN:
         SCI_WRITE(&sci0, "\nVolume Down msg received: ");
-        break;
+        break;*/
     case TEMPO:
         SCI_WRITE(&sci0, "\nTempo msg received: ");
         break;
@@ -281,7 +286,7 @@ void slave_receiver(App *self, int unused) {
     CANMsg msg;
     CAN_RECEIVE(&can0, &msg);
     switch (msg.buff[0]) {
-    case MUTE:
+    /*case MUTE:
         SCI_WRITE(&sci0, "\nMute msg received: ");
         ASYNC(self->player_pointer, mute_volume, 123);
         break;
@@ -292,7 +297,7 @@ void slave_receiver(App *self, int unused) {
     case VOLDOWN:
         SCI_WRITE(&sci0, "\nVolume Down msg received: ");
         ASYNC(self->player_pointer, dec_volume, 123);
-        break;
+        break;*/
     case TEMPO:
         SCI_WRITE(&sci0, "\nTempo msg received: ");
         ASYNC(self->controller_pointer, set_tempo, (int)msg.buff[1]);
@@ -464,17 +469,22 @@ void dec_volume(Player *self, int c) {
     }
 }
 
-void mute_volume(Player *self, int c) {
-
+void mute_volume(Player *self, int mute_flag) {
     if (self->muted) {
         SCI_WRITE(&sci0, "\nUnmuted");
         self->volume = self->volume_restore;
         self->muted = 0;
+        if (mute_flag == 1) {
+            SIO_WRITE(&sio0, 0); // turn LED on if slave
+        }
     } else {
         SCI_WRITE(&sci0, "\nMuted");
         self->volume_restore = self->volume;
         self->volume = 0;
         self->muted = 1;
+        if (mute_flag == 1) {
+            SIO_WRITE(&sio0, 1); // turn LED off if slave
+        }
     }
 }
 
@@ -508,6 +518,19 @@ void pause_play(Controller *self, int c) {
     }
 }
 
+void restart(Controller *self, int c) {
+    SCI_WRITE(&sci0, "\nRestarting");
+    ASYNC(self->player_pointer, stop_play, 123);
+
+    SIO_WRITE(&sio0, 1);
+    self->note_index = 0;
+    self->flip = 0;
+
+    self->led_on = 1;
+    ASYNC(self, calc_next_note, 1);
+    ASYNC(self, led_timeout, 0);
+}
+
 void tap_set_tempo(Controller *self, int c) {
     if (c <= 300 && c >= 30) {
         ASYNC(self, set_tempo, c);
@@ -530,18 +553,18 @@ void leader_reader(App *self, int c) {
         SCI_WRITE(&sci0, "\nControl - Volume: w/s/m - Background: q/a/z: - Tempo Mode: t - Key Mode: k - Play/Pause: p: - Toggle Slave/Leader: l");
         // Volume up
         if ((char)c == 'w') {
-            SYNC(self->player_pointer, inc_volume, 123);
-            send_can_msg(VOLUP, 0, 0);
+            SCI_WRITE(&sci0, "\nVolume Up key read: ");
+            ASYNC(self->player_pointer, inc_volume, 123);
         }
         // Volume down
         if ((char)c == 's') {
-            SYNC(self->player_pointer, dec_volume, 123);
-            send_can_msg(VOLDOWN, 0, 0);
+            SCI_WRITE(&sci0, "\nVolume Down key read: ");
+            ASYNC(self->player_pointer, dec_volume, 123);
         }
         // Mute
         if ((char)c == 'm') {
-            SYNC(self->player_pointer, mute_volume, 123);
-            send_can_msg(MUTE, 0, 0);
+            SCI_WRITE(&sci0, "\nMute key read: ");
+            ASYNC(self->player_pointer, mute_volume, 0);
         }
         // Tempo
         if ((char)c == 't') {
@@ -558,6 +581,14 @@ void leader_reader(App *self, int c) {
             ASYNC(self->controller_pointer, pause_play, 123);
             send_can_msg(PAUSE, 0, 0);
         }
+
+        // Restart
+        if ((char)c == 'r') {
+            ASYNC(self->controller_pointer, restart, 123);
+            send_can_msg(RESTART, 0, 0);
+        }
+
+        // leader/slave
         if ((char)c == 'l') {
             SCI_WRITE(&sci0, "\nMode set to Slave");
             self->node_state.is_leader = false;
@@ -572,7 +603,6 @@ void leader_reader(App *self, int c) {
         }
         if ((char)c == 'e') {
             if (self->mode == 1) {
-
                 int tempo_change = atoi(self->buffer);
                 if (tempo_change < 60 || tempo_change > 240) {
                     SCI_WRITE(&sci0, "\nTempo range is 60 - 240. Input a valid tempo.");
@@ -626,86 +656,18 @@ void slave_reader(App *self, int c) {
         SCI_WRITE(&sci0, "\nControl - Volume: w/s/m - Background: q/a/z: - Tempo Mode: t - Key Mode: k - Play/Pause: p: - Toggle Slave/Leader: l");
         // Volume up
         if ((char)c == 'w') {
-            send_can_msg(VOLUP, 0, 0);
+            SCI_WRITE(&sci0, "\nVolume Up key read: ");
+            ASYNC(self->player_pointer, inc_volume, 123);
         }
         // Volume down
         if ((char)c == 's') {
-            send_can_msg(VOLDOWN, 0, 0);
+            SCI_WRITE(&sci0, "\nVolume Down key read: ");
+            ASYNC(self->player_pointer, dec_volume, 123);
         }
         // Mute
         if ((char)c == 'm') {
-            send_can_msg(MUTE, 0, 0);
-        }
-        // Tempo
-        if ((char)c == 't') {
-            self->mode = 1;
-            SCI_WRITE(&sci0, "\nInput mode Tempo");
-        }
-        // Key
-        if ((char)c == 'k') {
-            self->mode = 2;
-            SCI_WRITE(&sci0, "\nInput mode Key");
-        }
-        // Pause/Play
-        if ((char)c == 'p') {
-            send_can_msg(PAUSE, 0, 0);
-        }
-        if ((char)c == 'l') {
-            SCI_WRITE(&sci0, "\nMode set to Leader");
-            self->node_state.is_leader = true;
-        }
-    }
-    /// Tempo/Key mode
-    else if (self->mode == 1 || self->mode == 2) {
-        if (self->mode == 1) {
-            SCI_WRITE(&sci0, "\nTempo mode");
-        } else {
-            SCI_WRITE(&sci0, "\nKey mode");
-        }
-        if ((char)c == 'e') {
-            if (self->mode == 1) {
-                int tempo_change = atoi(self->buffer);
-                if (tempo_change < 60 || tempo_change > 240) {
-                    SCI_WRITE(&sci0, "\nTempo range is 60 - 240. Input a valid tempo.");
-                    for (int i = 0; i < 20; i++) {
-                        self->buffer_pointer = 0;
-                        self->buffer[i] = 0;
-                        tempo_change = 0;
-                    }
-                    return;
-                }
-                SCI_WRITE(&sci0, "\nTempo set to: ");
-                SCI_WRITE(&sci0, self->buffer);
-                send_can_msg(TEMPO, (uchar)tempo_change, 0);
-            } else {
-                int key_change = atoi(self->buffer);
-                if (key_change < -5 || key_change > 5) {
-                    SCI_WRITE(&sci0, "\nKey range is -5 - 5. Input a valid key.");
-                    self->buffer_pointer = 0;
-                    for (int i = 0; i < 20; i++) {
-                        self->buffer[i] = 0;
-                    }
-                    return;
-                }
-                SCI_WRITE(&sci0, "\nKey set to: ");
-                SCI_WRITE(&sci0, self->buffer);
-                int sign = NEG;
-                if (c >= 0) {
-                    sign = POS;
-                }
-                send_can_msg(KEY, sign, (uchar)key_change);
-            }
-            for (int i = 0; i < 20; i++) {
-                self->buffer[i] = 0;
-            }
-            self->buffer_pointer = 0;
-            self->mode = 0;
-            SCI_WRITE(&sci0, "\nControl - Volume: w/s/m - Background: q/a/z: - Tempo Mode: t - Key Mode: k - Play/Pause: p: - Toggle Slave/Leader: l");
-        } else {
-            self->buffer[self->buffer_pointer] = c;
-            SCI_WRITE(&sci0, "\nInputted char: ");
-            sci_writechar(&sci0, c);
-            self->buffer_pointer++;
+            SCI_WRITE(&sci0, "\nMute key read: ");
+            ASYNC(self->player_pointer, mute_volume, 1);
         }
     }
 }
@@ -777,6 +739,7 @@ void calc_next_note(Controller *self, int c) {
             self->flip = 0;
             return;
         }
+
         AFTER(MSEC((int)play_length - 50), self, calc_next_note, 123);
     }
 }
