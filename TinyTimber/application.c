@@ -146,7 +146,7 @@ void tap_set_tempo(Controller *self, int c);
 void led_timeout(Controller *self, int c);
 void set_n_nodes(Controller *self, int c);
 void set_node_id(Controller *self, int c);
-int get_node_id(Controller *self, int c);
+uchar get_node_id(Controller *self, int c);
 int get_n_nodes(Controller *self, int c);
 
 Serial sci0 = initSerial(SCI_PORT0, &app, reader);
@@ -705,7 +705,7 @@ void set_node_id(Controller *self, int node_id) {
     self->node_id = node_id;
 }
 
-int get_node_id(Controller *self, int c) {
+uchar get_node_id(Controller *self, int c) {
     return self->node_id;
 }
 
