@@ -24,13 +24,16 @@
 #define KEY (uchar)'k'
 #define PAUSE (uchar)'p'
 #define RESTART (uchar)'r'
+#define PLAY (uchar)'x'
+#define STOP (uchar)'c'
+#define LEADER_INIT (uchar)'l'
+#define LEADER_ACKNOWLEDGED (uchar)'a'
 #define POS (uchar)1
 #define NEG (uchar)0
 
 // ##################### OBJECTS ####################
 
-typedef struct
-{
+typedef struct {
     Object super;
     int volume;
     int period;
@@ -39,7 +42,6 @@ typedef struct
     int *spointer;
     int volume_restore;
     int muted;
-
 } Player;
 
 Player player = {
@@ -63,6 +65,9 @@ typedef struct
     bool restart;
     int tempo_change;
     int led_on;
+    uchar node_id;
+    int n_nodes;
+    uchar receiver_id;
 } Controller;
 
 Controller controller = {
@@ -76,13 +81,10 @@ Controller controller = {
     false,
     0,
     0,
+    0,
+    1,
+    0,
 };
-
-typedef struct {
-    uchar node_id;
-    bool is_leader;
-    int n_nodes;
-} NodeState;
 
 typedef struct
 {
@@ -99,7 +101,7 @@ typedef struct
     Timer timer;
     Time times[3];
     int time_pointer;
-    NodeState node_state;
+    bool is_leader;
 } App;
 
 App app = {
@@ -116,7 +118,7 @@ App app = {
     initTimer(),
     {0},
     0,
-    {0, true, 0},
+    false,
 };
 
 // ################## METHOD DEFINITIONS #############
@@ -142,6 +144,10 @@ void pause_play(Controller *self, int c);
 void restart(Controller *self, int c);
 void tap_set_tempo(Controller *self, int c);
 void led_timeout(Controller *self, int c);
+void set_n_nodes(Controller *self, int c);
+void set_node_id(Controller *self, int c);
+int get_node_id(Controller *self, int c);
+int get_n_nodes(Controller *self, int c);
 
 Serial sci0 = initSerial(SCI_PORT0, &app, reader);
 Can can0 = initCan(CAN_PORT0, &app, receiver);
@@ -249,40 +255,9 @@ void tap_tempo(App *self, int c) {
 
 // ################ RECEIVER ##################
 void receiver(App *self, int unused) {
-    if (self->node_state.is_leader) {
-        leader_receiver(self, unused);
-    } else {
-        slave_receiver(self, unused);
+    if (self->is_leader == true) {
+        return;
     }
-    SCI_WRITE(&sci0, "\n");
-}
-
-void leader_receiver(App *self, int unused) {
-    CANMsg msg;
-    CAN_RECEIVE(&can0, &msg);
-    switch (msg.buff[0]) {
-    /*case MUTE:
-        SCI_WRITE(&sci0, "\nMute msg received: ");
-        break;
-    case VOLUP:
-        SCI_WRITE(&sci0, "\nVolume Up msg received: ");
-        break;
-    case VOLDOWN:
-        SCI_WRITE(&sci0, "\nVolume Down msg received: ");
-        break;*/
-    case TEMPO:
-        SCI_WRITE(&sci0, "\nTempo msg received: ");
-        break;
-    case KEY:
-        SCI_WRITE(&sci0, "\nKey msg received: ");
-        break;
-    case PAUSE:
-        SCI_WRITE(&sci0, "\nPause msg received: ");
-        break;
-    }
-}
-
-void slave_receiver(App *self, int unused) {
     CANMsg msg;
     CAN_RECEIVE(&can0, &msg);
     switch (msg.buff[0]) {
@@ -314,7 +289,36 @@ void slave_receiver(App *self, int unused) {
         SCI_WRITE(&sci0, "\nPause msg received: ");
         ASYNC(self->controller_pointer, pause_play, 123);
         break;
+    case PLAY:
+        SCI_WRITE(&sci0, "\nPlay msg received: ");
+        uchar my_id = SYNC(self->controller_pointer, get_node_id, 123);
+        if (msg.nodeId == my_id) {
+            int note_index = (int)msg.buff[1];
+            int key = (int)msg.buff[2];
+            int next_period = periods[notes[note_index] + 10 + key];
+            SYNC(self->player_pointer, set_period, next_period);
+            ASYNC(self->player_pointer, play, 123);
+        }
+        break;
+    case STOP:
+        SCI_WRITE(&sci0, "\nPause msg received: ");
+        uchar my_id = SYNC(self->controller_pointer, get_node_id, 123);
+        if (msg.nodeId == my_id) {
+            ASYNC(self->controller_pointer, stop_play, 123);
+        }
+        break;
+    case LEADER_INIT:
+        self->is_leader = false;
+        send_can_msg(0, LEADER_ACKNOWLEDGED, 0, 0);
+        break;
+    case LEADER_ACKNOWLEDGED:
+        if (self->is_leader) {
+            int n_nodes = SYNC(self->controller_pointer, get_n_nodes, 123);
+            SYNC(self->controller_pointer, set_n_nodes, n_nodes + 1);
+        }
+        break;
     }
+    SCI_WRITE(&sci0, "\n");
 }
 
 // ################ DATA LISTS ################
@@ -424,15 +428,16 @@ void set_period(Player *self, int c) {
     self->period = c;
 }
 
-void send_can_msg(uchar command, uchar argone, uchar argtwo) {
+int send_can_msg(uchar receiver_id, uchar command, uchar argone, uchar argtwo) {
     CANMsg msg;
     msg.msgId = 1;
-    msg.nodeId = 1;
+    msg.nodeId = receiver_id;
     msg.length = 3;
     msg.buff[0] = command;
     msg.buff[1] = argone;
     msg.buff[2] = argtwo;
-    CAN_SEND(&can0, &msg);
+    int delivered = CAN_SEND(&can0, &msg);
+    return delivered;
 }
 
 void inc_volume(Player *self, int c) {
@@ -540,7 +545,7 @@ void tap_set_tempo(Controller *self, int c) {
 // #################### READER ####################
 
 void reader(App *self, int c) {
-    if (self->node_state.is_leader) {
+    if (self->is_leader) {
         leader_reader(self, c);
     } else {
         slave_reader(self, c);
@@ -579,20 +584,15 @@ void leader_reader(App *self, int c) {
         // Pause/Play
         if ((char)c == 'p') {
             ASYNC(self->controller_pointer, pause_play, 123);
-            send_can_msg(PAUSE, 0, 0);
+            send_can_msg(0, PAUSE, 0, 0);
         }
 
         // Restart
         if ((char)c == 'r') {
             ASYNC(self->controller_pointer, restart, 123);
-            send_can_msg(RESTART, 0, 0);
+            send_can_msg(0, RESTART, 0, 0);
         }
 
-        // leader/slave
-        if ((char)c == 'l') {
-            SCI_WRITE(&sci0, "\nMode set to Slave");
-            self->node_state.is_leader = false;
-        }
     }
     /// Tempo/Key mode
     else if (self->mode == 1 || self->mode == 2) {
@@ -616,7 +616,7 @@ void leader_reader(App *self, int c) {
                 SCI_WRITE(&sci0, "\nTempo set to: ");
                 SCI_WRITE(&sci0, self->buffer);
                 SYNC(self->controller_pointer, set_tempo, tempo_change);
-                send_can_msg(TEMPO, (uchar)tempo_change, 0);
+                send_can_msg(0, TEMPO, (uchar)tempo_change, 0);
             } else {
                 int key_change = atoi(self->buffer);
                 if (key_change < -5 || key_change > 5) {
@@ -634,7 +634,7 @@ void leader_reader(App *self, int c) {
                 if (c >= 0) {
                     sign = POS;
                 }
-                send_can_msg(KEY, sign, (uchar)key_change);
+                send_can_msg(0, KEY, sign, (uchar)key_change);
             }
             for (int i = 0; i < 20; i++) {
                 self->buffer[i] = 0;
@@ -669,6 +669,12 @@ void slave_reader(App *self, int c) {
             SCI_WRITE(&sci0, "\nMute key read: ");
             ASYNC(self->player_pointer, mute_volume, 1);
         }
+        // become leader
+        if ((char)c == 'l') {
+            SCI_WRITE(&sci0, "\nMode set to Leader");
+            self->is_leader = true;
+            send_can_msg(0, LEADER_INIT, 0, 0);
+        }
     }
 }
 
@@ -691,6 +697,21 @@ void play(Player *self, int c) {
 }
 
 //##################### CONTROLLER ################
+void set_n_nodes(Controller *self, int n_nodes) {
+    self->n_nodes = n_nodes;
+}
+
+void set_node_id(Controller *self, int node_id) {
+    self->node_id = node_id;
+}
+
+int get_node_id(Controller *self, int c) {
+    return self->node_id;
+}
+
+int get_n_nodes(Controller *self, int c) {
+    return self->n_nodes;
+}
 
 void led_timeout(Controller *self, int c) {
     self->led_on = 1;
@@ -712,19 +733,31 @@ void led_timeout(Controller *self, int c) {
 void calc_next_note(Controller *self, int c) {
     if (self->flip == 1) {
         // If there is a silence at the end of the note
-        ASYNC(self->player_pointer, stop_play, 123);
+        if (self->receiver_id == self->node_id) {
+            ASYNC(self->player_pointer, stop_play, 123);
+        } else {
+            int delivered = send_can_msg(self->receiver_id, STOP, 0, 0);
+            /*if(delivered == 1){} message not received*/
+        }
         self->flip = 0;
         AFTER(MSEC(50), self, calc_next_note, 123);
         self->note_index = (self->note_index + 1) % 32;
+        self->receiver_id = (self->receiver_id + 1) % self->n_nodes;
     } else {
         // Turn on the LED if led is off when it should be on
         if (!self->led_on) {
             ASYNC(self, led_timeout, 0);
         }
-        // Set the period
-        int next_period = periods[notes[self->note_index] + 10 + self->key];
-        SYNC(self->player_pointer, set_period, next_period);
-        ASYNC(self->player_pointer, play, 123);
+
+        if (self->receiver_id == self->node_id) {
+            int next_period = periods[notes[self->note_index] + 10 + self->key];
+            SYNC(self->player_pointer, set_period, next_period);
+            ASYNC(self->player_pointer, play, 123);
+        } else {
+            int delivered = send_can_msg(self->receiver_id, PLAY, (uchar)self->note_index, (uchar)self->key);
+            /*if(delivered == 1){} message not received*/
+        }
+
         self->flip = 1;
         float play_length = (1.0 / ((float)self->tempo / 120.0)) * 500.0;
         if (lengths[self->note_index] == B) {
@@ -745,23 +778,11 @@ void calc_next_note(Controller *self, int c) {
 }
 
 void startApp(App *self, int arg) {
-    CANMsg msg;
-
     CAN_INIT(&can0);
     SCI_INIT(&sci0);
     SIO_INIT(&sio0);
     SIO_TOGGLE(&sio0);
     SCI_WRITE(&sci0, "Hello, hello...\n");
-    msg.msgId = 1;
-    msg.nodeId = 1;
-    msg.length = 6;
-    msg.buff[0] = 'H';
-    msg.buff[1] = 'e';
-    msg.buff[2] = 'l';
-    msg.buff[3] = 'l';
-    msg.buff[4] = 'o';
-    msg.buff[5] = 0;
-    CAN_SEND(&can0, &msg);
     SCI_WRITE(&sci0, "\nControl - Volume: w/s/m - Background: q/a/z: - Tempo Mode: t - Key Mode: k - Play/Pause: p: - Toggle Slave/Leader: l");
 }
 
