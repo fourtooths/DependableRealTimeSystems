@@ -26,7 +26,7 @@
 #define RESTART (uchar)'r'
 #define PLAY (uchar)'x'
 #define STOP (uchar)'c'
-#define LEADER_INIT (uchar)'l'
+#define LEADER_ELECTION (uchar)'l'
 #define LEADER_ACKNOWLEDGED (uchar)'a'
 #define POS (uchar)1
 #define NEG (uchar)0
@@ -102,6 +102,7 @@ typedef struct
     Time times[3];
     int time_pointer;
     bool is_leader;
+    bool is_candidate;
 } App;
 
 App app = {
@@ -118,6 +119,7 @@ App app = {
     initTimer(),
     {0},
     0,
+    false,
     false,
 };
 
@@ -146,7 +148,7 @@ void tap_set_tempo(Controller *self, int c);
 void led_timeout(Controller *self, int c);
 void set_n_nodes(Controller *self, int c);
 void set_node_id(Controller *self, int c);
-int get_node_id(Controller *self, int c);
+uchar get_node_id(Controller *self, int c);
 int get_n_nodes(Controller *self, int c);
 
 Serial sci0 = initSerial(SCI_PORT0, &app, reader);
@@ -261,18 +263,6 @@ void receiver(App *self, int unused) {
     CANMsg msg;
     CAN_RECEIVE(&can0, &msg);
     switch (msg.buff[0]) {
-    /*case MUTE:
-        SCI_WRITE(&sci0, "\nMute msg received: ");
-        ASYNC(self->player_pointer, mute_volume, 123);
-        break;
-    case VOLUP:
-        SCI_WRITE(&sci0, "\nVolume Up msg received: ");
-        ASYNC(self->player_pointer, inc_volume, 123);
-        break;
-    case VOLDOWN:
-        SCI_WRITE(&sci0, "\nVolume Down msg received: ");
-        ASYNC(self->player_pointer, dec_volume, 123);
-        break;*/
     case TEMPO:
         SCI_WRITE(&sci0, "\nTempo msg received: ");
         ASYNC(self->controller_pointer, set_tempo, (int)msg.buff[1]);
@@ -307,7 +297,10 @@ void receiver(App *self, int unused) {
             ASYNC(self->controller_pointer, stop_play, 123);
         }
         break;
-    case LEADER_INIT:
+    case LEADER_ELECTION:
+        /*uchar if (self->is_candidate) {
+
+        }*/
         self->is_leader = false;
         send_can_msg(0, LEADER_ACKNOWLEDGED, 0, 0);
         break;
@@ -672,8 +665,10 @@ void slave_reader(App *self, int c) {
         // become leader
         if ((char)c == 'l') {
             SCI_WRITE(&sci0, "\nMode set to Leader");
-            self->is_leader = true;
-            send_can_msg(0, LEADER_INIT, 0, 0);
+            self->is_candidate = true;
+            SYNC(self->controller_pointer, set_n_nodes, 1); // reset node count
+            uchar my_id = SYNC(self->controller_pointer, get_node_id, 123);
+            send_can_msg(0, LEADER_ELECTION, my_id, 0);
         }
     }
 }
@@ -702,10 +697,10 @@ void set_n_nodes(Controller *self, int n_nodes) {
 }
 
 void set_node_id(Controller *self, int node_id) {
-    self->node_id = node_id;
+    self->node_id = (uchar)node_id;
 }
 
-int get_node_id(Controller *self, int c) {
+uchar get_node_id(Controller *self, int c) {
     return self->node_id;
 }
 
