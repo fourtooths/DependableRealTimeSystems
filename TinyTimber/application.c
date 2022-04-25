@@ -28,6 +28,7 @@
 #define STOP (uchar)'c'
 #define LEADER_ELECTION (uchar)'l'
 #define LEADER_ACKNOWLEDGED (uchar)'a'
+#define LEADER_NOT_ACKNOWLEDGED (uchar)'z'
 #define POS (uchar)1
 #define NEG (uchar)0
 
@@ -298,16 +299,34 @@ void receiver(App *self, int unused) {
         }
         break;
     case LEADER_ELECTION:
-        /*uchar if (self->is_candidate) {
+        uchar my_id = SYNC(self->controller_pointer, get_node_id, 123);
+        uchar candidate_id = msg.buff[1];
 
-        }*/
-        self->is_leader = false;
-        send_can_msg(0, LEADER_ACKNOWLEDGED, 0, 0);
+        if (self->is_candidate && candidate_id > my_id) {
+            send_can_msg(0, LEADER_NOT_ACKNOWLEDGED, my_id, candidate_id);
+            break;
+        }
+        if (self->is_leader) {
+            // send stuff to new leader
+            // if tempo or key changed, send, otherwise don't
+        }
+        send_can_msg(0, LEADER_ACKNOWLEDGED, my_id, candidate_id);
         break;
     case LEADER_ACKNOWLEDGED:
-        if (self->is_leader) {
+        uchar candidate_id = msg.buff[2];
+        uchar my_id = SYNC(self->controller_pointer, get_node_id, 123);
+        if (self->is_candidate && my_id == candidate_id) {
+            self->is_leader = true;
             int n_nodes = SYNC(self->controller_pointer, get_n_nodes, 123);
             SYNC(self->controller_pointer, set_n_nodes, n_nodes + 1);
+        }
+        break;
+    case LEADER_NOT_ACKNOWLEDGED:
+        uchar candidate_id = msg.buff[2];
+        uchar my_id = SYNC(self->controller_pointer, get_node_id, 123);
+        if (my_id == candidate_id) {
+            self->is_candidate = false;
+            self->is_leader = false;
         }
         break;
     }
